@@ -111,6 +111,13 @@ def start():
 	last = GPIO.input(button)
 	while True:
 		val = GPIO.input(button)
+		if (os.path.isfile(path+'voiceHack'))
+			os.remove(path+'voiceHack')
+			voiceHack = true
+			val = 0
+			end_time = time.time() + 5
+		elif (voiceHack and end_time < time.time())
+			val = 1
 		if val != last:
 			last = val
 			if val == 1 and recorded == True:
