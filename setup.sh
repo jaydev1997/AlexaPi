@@ -1,7 +1,7 @@
 #! /bin/bash
 baselocation=$PWD
 apt-get update
-apt-get install libasound2-dev memcached python-pip mpg123 python-alsaaudio python-aubio
+apt-get install libasound2-dev memcached python-pip mpg123 python-alsaaudio python-aubio python-dev sox python-pyaudio libportaudio-dev libatlas-dev libatlas-base-dev
 pip install -r requirements.txt
 cp initd_alexa.sh /etc/init.d/alexa
 cd /etc/rc5.d

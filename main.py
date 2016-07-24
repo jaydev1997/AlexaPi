@@ -11,6 +11,10 @@ from creds import *
 import requests
 import json
 import re
+import sys
+import signal
+import snowboydecoder
+import threading
 from memcache import Client
 
 #Settings
@@ -19,22 +23,36 @@ lights = [24, 25] # GPIO Pins with LED's conneted
 device = "plughw:1" # Name of your microphone/soundcard in arecord -L
 
 #Setup
+if len(sys.argv) == 1:
+    print("Error: need to specify model name")
+    print("Usage: python demo.py your.model")
+    sys.exit(-1)
+
+model = sys.argv[1]
 recorded = False
 servers = ["127.0.0.1:11211"]
 mc = Client(servers, debug=1)
+interrupted = False
 path = os.path.realpath(__file__).rstrip(os.path.basename(__file__))
 
+def signal_handler(signal, frame):
+	global interrupted
+	interrupted = True
+	exit()
 
+def interrupt_callback():
+	global interrupted
+	return interrupted
 
 def internet_on():
-    print "Checking Internet Connection"
-    try:
-        r =requests.get('https://api.amazon.com/auth/o2/token')
-	print "Connection OK"
-        return True
-    except:
-	print "Connection Failed"
-    	return False
+	print "Checking Internet Connection"
+	try:
+		r = requests.get('https://api.amazon.com/auth/o2/token')
+		print "Connection OK"
+		return True
+	except:
+		print "Connection Failed"
+		return False
 
 	
 def gettoken():
@@ -58,24 +76,24 @@ def alexa():
 	url = 'https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize'
 	headers = {'Authorization' : 'Bearer %s' % gettoken()}
 	d = {
-   		"messageHeader": {
-       		"deviceContext": [
-           		{
-               		"name": "playbackState",
-               		"namespace": "AudioPlayer",
-               		"payload": {
-                   		"streamId": "",
-        			   	"offsetInMilliseconds": "0",
-                   		"playerActivity": "IDLE"
-               		}
-           		}
-       		]
+		"messageHeader": {
+			"deviceContext": [
+				{
+					"name": "playbackState",
+					"namespace": "AudioPlayer",
+					"payload": {
+						"streamId": "",
+						"offsetInMilliseconds": "0",
+						"playerActivity": "IDLE"
+					}
+				}
+			]
 		},
-   		"messageBody": {
-       		"profile": "alexa-close-talk",
-       		"locale": "en-us",
-       		"format": "audio/L16; rate=16000; channels=1"
-   		}
+		"messageBody": {
+			"profile": "alexa-close-talk",
+			"locale": "en-us",
+			"format": "audio/L16; rate=16000; channels=1"
+		}
 	}
 	with open(path+'recording.wav') as inf:
 		files = [
@@ -103,30 +121,59 @@ def alexa():
 			GPIO.output(25, GPIO.HIGH)
 			time.sleep(.2)
 			GPIO.output(lights, GPIO.LOW)
-		
 
-
+def snowboy_callback():
+	print "Snowboy hotword detected"
+	file = open(path+'voiceHack', 'w+')
+	print "creating file"
+	file.close()
+	snowboydecoder.play_audio_file()
 
 def start():
+	signal.signal(signal.SIGINT, signal_handler)
 	last = GPIO.input(button)
+	detector = snowboydecoder.HotwordDetector(model, sensitivity=0.5)
+	snowboy_thread = threading.Thread(target=lambda: detector.start(detected_callback=snowboy_callback, interrupt_check=interrupt_callback, sleep_time=0.03))
+	snowboy_thread.setDaemon(True)
+	snowboy_thread.start()
+	end_time = 0
+	recorded = False
 	while True:
 		val = GPIO.input(button)
-		if (os.path.isfile(path+'voiceHack'))
+		if os.path.isfile(path+'voiceHack'):
+			print "File found"
 			os.remove(path+'voiceHack')
-			voiceHack = true
-			val = 0
-			end_time = time.time() + 5
-		elif (voiceHack and end_time < time.time())
-			val = 1
-		if val != last:
-			last = val
-			if val == 1 and recorded == True:
+			end_time = time.time() + 6
+		if val != last or end_time != 0:
+			print "Value changed or end_time is set"
+			print "end_time:"
+			print end_time
+			print "now:"
+			print time.time()
+			if ((val == 1 and last != val) or end_time < time.time()) and recorded == True:
+				if val == 1 and last != val:
+					print "GPIO ended recording"
+				if end_time < time.time():
+					print "Time ended recording"
 				rf = open(path+'recording.wav', 'w') 
 				rf.write(audio)
 				rf.close()
 				inp = None
+				print "Sending recording"
 				alexa()
-			elif val == 0:
+				recorded = False
+				end_time = 0
+				print "Starting snowboy again"
+				detector = snowboydecoder.HotwordDetector(model, sensitivity=0.5)
+				snowboy_thread = threading.Thread(target=lambda: detector.start(detected_callback=snowboy_callback, interrupt_check=interrupt_callback, sleep_time=0.03))
+				snowboy_thread.setDaemon(True)
+				snowboy_thread.start()
+			elif (val == 0 or end_time != 0) and recorded == False:
+				print "Starting recording"
+				if snowboy_thread.isAlive():
+					print "Terminating snowboy to free resource"
+					detector.terminate()
+					time.sleep(0.5)
 				GPIO.output(25, GPIO.HIGH)
 				inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, device)
 				inp.setchannels(1)
@@ -138,7 +185,9 @@ def start():
 				if l:
 					audio += data
 				recorded = True
-		elif val == 0:
+			last = val
+		if (val == 0 or end_time != 0) and recorded == True:
+			print "Button still pressed / time not up yet"
 			l, data = inp.read()
 			if l:
 				audio += data
