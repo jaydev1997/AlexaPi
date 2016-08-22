@@ -5,7 +5,7 @@
 ### Contributors
  
 * Sam Machin
- 
+* Janis Walliser 
 ---
  
 This is the code needed to Turn a Raspberry Pi into a client for Amazon's Alexa service, I have developed this against the Pi 2 but I see no reason it shouldn't run on the other models. Feedback welcome.
@@ -68,9 +68,12 @@ The internet_on() routine is testing the connection to the Amazon auth server as
 
 The auth token is generated from the request_token the auth_token is then stored in a local memcache with and expiry of just under an hour to align with the validity at Amazon, if the function fails to get an access_token from memcache it will then request a new one from Amazon using the refresh token.
 
+### Voice Activation
+For the voice activation to work you need a model file for your keyword. Head over to https://snowboy.kitt.ai. You need to log in! Now you can either download a file or create your own by recording your voice. Place your file under /root/Alexa.pmdl for it to work out of the box or change the init.d script in /etc/init.d/alexa to point to your model file.
 
-
-
+The voice recognition records it surroundings for 6 seconds after hearing the keyword and will upload that to the alexa service. To change the timefrime adjust the line
+end_time = time.time() + 6
+in the main.py file accordingly.
 
 
 
