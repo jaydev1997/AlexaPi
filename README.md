@@ -33,7 +33,7 @@ Boot your fresh Pi and login to a command prompt as root.
 Make sure you are in /root
 
 Clone this repo to the Pi
-`git clone https://github.com/sammachin/AlexaPi.git`
+`git clone https://github.com/PhyberApex/AlexaPi.git`
 Run the setup script
 `./setup.sh`
 
